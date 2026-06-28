@@ -15,7 +15,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN python -m nltk.downloader punkt punkt_tab
 
 # Copy source code
-COPY config.py loader.py rag.py evaluation.py database.py main.py ./
+COPY main.py .
+COPY core/ ./core/
 COPY models/ ./models/
 COPY routers/ ./routers/
 COPY index/ ./index/

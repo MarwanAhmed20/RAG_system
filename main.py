@@ -2,8 +2,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from loader import load_all
-from database import init_db
+from core.loader import load_all
+from core.database import init_db
 from routers import qa, health, evaluate
 
 

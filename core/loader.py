@@ -8,7 +8,7 @@ from sentence_transformers import SentenceTransformer, CrossEncoder
 from rank_bm25 import BM25Okapi
 from nltk.tokenize import word_tokenize
 
-from config import settings
+from core.config import settings
 
 # ── globals ───────────────────────────────────────────────────────────────────
 embedding_model: SentenceTransformer = None

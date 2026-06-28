@@ -1,6 +1,6 @@
 from fastapi import APIRouter
-from loader import health_status
-from rag import cache_stats
+from core.loader import health_status
+from core.rag import cache_stats
 
 router = APIRouter(prefix="/health", tags=["Health"])
 

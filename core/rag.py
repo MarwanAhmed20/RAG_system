@@ -15,8 +15,8 @@ from groq import Groq
 from nltk.tokenize import word_tokenize
 from cachetools import TTLCache
 
-import loader
-from config import settings
+import core.loader as loader
+from core.config import settings
 
 # ── caches ────────────────────────────────────────────────────────────────────
 # dense_search : 1024 unique (query, top_k) pairs, expire after 1 hour

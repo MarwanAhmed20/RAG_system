@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
-from database import get_db
+from core.database import get_db
 from models.db_models import Query, Response, Analytics
-from rag import rag_pipeline, memory
+from core.rag import rag_pipeline, memory
 
 router = APIRouter(prefix="/ask-question", tags=["Q&A"])
 

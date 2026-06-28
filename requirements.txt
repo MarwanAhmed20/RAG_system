@@ -11,3 +11,4 @@ rouge-score
 pandas
 numpy
 cachetools
+pyarrow 

@@ -176,20 +176,33 @@ Runs evaluation and optionally generates an HTML report.
 **Request**
 ```json
 {
-  "retrieval_cases": [
-    { "query": "What is fertilisation?", "relevant_ids": [4659, 11561] }
-  ],
-  "quality_cases": [
-    { "query": "Who played Mantis?", "reference_answer": "Pom Klementieff" }
-  ],
-  "benchmark_queries": [
-    "What type of fertilisation takes place in humans",
-    "Who played Mantis in Guardians of the Galaxy 2"
-  ],
-  "k_values": [1, 3, 5],
-  "benchmark_runs": 3,
-  "generate_html_report": true
-}
+    "retrieval_cases": [
+      { 
+        "query": "What is fertilisation?", 
+        "relevant_ids": [74508, 58981, 11561] 
+      },
+      { 
+        "query": "Who played Mantis in Guardians of the Galaxy 2?", 
+        "relevant_ids": [14735, 70319, 48347, 57866] 
+      }
+    ],
+    "quality_cases": [
+      { 
+        "query": "Who played Mantis in Guardians of the Galaxy 2?", 
+        "reference_answer": "Pom Klementieff played the role of Mantis in Guardians of the Galaxy Vol. 2" 
+      },
+      {
+        "query": "What is fertilisation?",
+        "reference_answer": "Fertilization is the union of a human egg and sperm, usually occurring in the ampulla of the fallopian tube"
+      }
+    ],
+    "benchmark_queries": [
+      "What type of fertilisation takes place in humans",
+      "Who played Mantis in Guardians of the Galaxy 2"
+    ],
+    "k_values": [1, 3, 5],
+    "benchmark_runs": 3,
+  }
 ```
 
 **Response**

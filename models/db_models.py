@@ -1,7 +1,7 @@
 from datetime import datetime
 from sqlalchemy import Integer, String, Float, Text, DateTime, ForeignKey, JSON, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from database import Base
+from core.database import Base
 
 
 class Query(Base):
