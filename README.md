@@ -39,6 +39,11 @@ rag_project/
 ---
 
 ## Quickstart
+### 0. download index and metadata
+
+```bash
+python download_index.py
+```
 
 ### 1. Install dependencies
 
@@ -66,13 +71,17 @@ Interactive docs at `http://localhost:8000/docs`
 
 ## Docker
 
+
+
+```bash
+python download_index.py
+```
+
 ### Build
 
 ```bash
 docker build -t rag-api .
 ```
-
-
 
 ### Run
 

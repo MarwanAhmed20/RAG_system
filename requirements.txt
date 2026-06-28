@@ -10,3 +10,4 @@ nltk
 rouge-score
 pandas
 numpy
+cachetools

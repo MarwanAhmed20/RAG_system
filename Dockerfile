@@ -18,6 +18,7 @@ RUN python -m nltk.downloader punkt punkt_tab
 COPY config.py loader.py rag.py evaluation.py database.py main.py ./
 COPY models/ ./models/
 COPY routers/ ./routers/
+COPY index/ ./index/
 
 # Create directory for SQLite DB
 RUN mkdir -p /app/data

@@ -7,14 +7,25 @@ import json
 import re
 import unicodedata
 from collections import defaultdict
+from threading import Lock
 from typing import List, Dict, Any, Tuple
 
 import numpy as np
 from groq import Groq
 from nltk.tokenize import word_tokenize
+from cachetools import TTLCache
 
 import loader
 from config import settings
+
+# ── caches ────────────────────────────────────────────────────────────────────
+# dense_search : 1024 unique (query, top_k) pairs, expire after 1 hour
+_dense_cache: TTLCache = TTLCache(maxsize=1024, ttl=3600)
+_dense_lock = Lock()
+
+# rewrite_query: 512 rewrites, expire after 30 minutes
+_rewrite_cache: TTLCache = TTLCache(maxsize=512, ttl=1800)
+_rewrite_lock = Lock()
 
 
 # ── preprocessing ─────────────────────────────────────────────────────────────
@@ -30,13 +41,24 @@ def preprocess_query(query: str) -> str:
 # ── retrieval ──────────────────────────────────────────────────────────────────
 
 def dense_search(query: str, top_k: int = 20) -> Tuple[np.ndarray, np.ndarray]:
+    cache_key = (query, top_k)
+
+    with _dense_lock:
+        if cache_key in _dense_cache:
+            return _dense_cache[cache_key]
+
     embedding = loader.embedding_model.encode(
         query,
         convert_to_numpy=True,
         normalize_embeddings=True,
     ).astype(np.float32)
     scores, ids = loader.faiss_index.search(np.array([embedding]), top_k)
-    return ids[0], scores[0]
+    result = (ids[0], scores[0])
+
+    with _dense_lock:
+        _dense_cache[cache_key] = result
+
+    return result
 
 
 def bm25_search(query: str, top_k: int = 20) -> Tuple[np.ndarray, np.ndarray]:
@@ -129,6 +151,15 @@ def rewrite_query(query: str, history: list) -> str:
     """Rewrite to standalone question when there is conversation history."""
     if not history:
         return query
+
+    # cache key = query + last 2 history turns (enough context, not too specific)
+    history_key = str(history[-2:])
+    cache_key = (query, history_key)
+
+    with _rewrite_lock:
+        if cache_key in _rewrite_cache:
+            return _rewrite_cache[cache_key]
+
     prompt = f"""Rewrite the last question into a self-contained standalone question.
 
 Conversation:
@@ -139,7 +170,12 @@ Last Question:
 
 Output JSON only: {{"standalone_question": "..."}}"""
     raw = call_llm("You rewrite conversational questions into standalone questions.", prompt, as_json=True)
-    return json.loads(raw)["standalone_question"].strip()
+    rewritten = json.loads(raw)["standalone_question"].strip()
+
+    with _rewrite_lock:
+        _rewrite_cache[cache_key] = rewritten
+
+    return rewritten
 
 
 def build_prompt(history: list, context: str, query: str) -> Tuple[str, str]:
@@ -195,6 +231,15 @@ class ConversationMemory:
 memory = ConversationMemory()
 
 
+# ── cache stats (for /health) ─────────────────────────────────────────────────
+
+def cache_stats() -> Dict[str, Any]:
+    return {
+        "dense_cache":   {"size": len(_dense_cache),   "maxsize": _dense_cache.maxsize,   "ttl": _dense_cache.ttl},
+        "rewrite_cache": {"size": len(_rewrite_cache), "maxsize": _rewrite_cache.maxsize, "ttl": _rewrite_cache.ttl},
+    }
+
+
 # ── main pipeline ──────────────────────────────────────────────────────────────
 
 def rag_pipeline(
@@ -238,7 +283,7 @@ def rag_pipeline(
     if confidence < settings.CONFIDENCE_NONE:
         answer = "I don't know based on the provided context."
     elif confidence < settings.CONFIDENCE_LOW:
-        answer += "\n\n⚠️ Confidence is low."
+        answer += "\n\n Confidence is low."
 
     memory.add(session_id, "user", question)
     memory.add(session_id, "assistant", answer)

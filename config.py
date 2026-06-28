@@ -5,8 +5,8 @@ from dataclasses import dataclass, field
 @dataclass
 class Settings:
     # ── Paths ────────────────────────────────────────────────────────────────
-    FAISS_INDEX_PATH: str = "models/faiss_index.bin"
-    METADATA_PATH: str = "models/metadata.parquet"
+    FAISS_INDEX_PATH: str = "index/faiss_index.bin"
+    METADATA_PATH: str = "index/metadata.parquet"
 
     # ── Models ───────────────────────────────────────────────────────────────
     EMBEDDING_MODEL: str = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
