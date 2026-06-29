@@ -1,6 +1,6 @@
 # RAG Q&A API
 
-A production-ready Retrieval-Augmented Generation system built on FAISS, sentence-transformers, BM25, a cross-encoder re-ranker, and Groq LLM — served via FastAPI with SQLite persistence.
+A Retrieval-Augmented Generation system built on FAISS, sentence-transformers, BM25, a cross-encoder re-ranker, and Groq LLM — served via FastAPI with SQLite persistence.
 
 ---
 
@@ -10,7 +10,7 @@ A production-ready Retrieval-Augmented Generation system built on FAISS, sentenc
 rag_project/
 ├── config.py          # All settings (paths, model names, thresholds)
 ├── loader.py          # Loads model/index/BM25 once at startup
-├── rag.py             # Core RAG logic: retrieval, LLM, conversation memory
+├── rag.py             # Core RAG logic: retrieval, LLM, conversation memory, caching
 ├── evaluation.py      # Precision@K, Recall@K, BLEU, ROUGE, latency, HTML report
 ├── database.py        # SQLAlchemy engine + session
 ├── models/
@@ -20,7 +20,7 @@ rag_project/
 ├── routers/
 │   ├── qa.py          # POST /ask-question
 │   ├── health.py      # GET  /health
-│   └── evaluate.py    # POST /evaluate
+│   └── evaluate.py    # POST /evaluate  |  POST /evaluate/auto
 ├── main.py            # FastAPI app entry point
 ├── requirements.txt
 ├── Dockerfile
@@ -130,9 +130,9 @@ Main Q&A endpoint.
   "confidence": 0.854,
   "sources": [
     {
-      "faiss_id": 4659,
+      "faiss_id": 14735,
       "doc_chunk": "Human fertilization is the union...",
-      "rerank_score": 7.17
+      "rerank_score": 9.39
     }
   ],
   "latency": {
@@ -154,16 +154,20 @@ Clears conversation history for a session.
 
 ### `GET /health`
 
-System health check.
+System health check — includes cache stats.
 
 **Response**
 ```json
 {
   "status": "ok",
-  "index_size": 86212,
-  "metadata_rows": 86212,
+  "index_size": 87115,
+  "metadata_rows": 87115,
   "embedding_model": "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
-  "cross_encoder_model": "cross-encoder/ms-marco-MiniLM-L-6-v2"
+  "cross_encoder_model": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+  "cache": {
+    "dense_cache":   { "size": 9,  "maxsize": 1024, "ttl": 3600 },
+    "rewrite_cache": { "size": 3,  "maxsize": 512,  "ttl": 1800 }
+  }
 }
 ```
 
@@ -171,38 +175,27 @@ System health check.
 
 ### `POST /evaluate`
 
-Runs evaluation and optionally generates an HTML report.
+Manual evaluation — you provide the test cases.
 
 **Request**
 ```json
 {
-    "retrieval_cases": [
-      { 
-        "query": "What is fertilisation?", 
-        "relevant_ids": [74508, 58981, 11561] 
-      },
-      { 
-        "query": "Who played Mantis in Guardians of the Galaxy 2?", 
-        "relevant_ids": [14735, 70319, 48347, 57866] 
-      }
-    ],
-    "quality_cases": [
-      { 
-        "query": "Who played Mantis in Guardians of the Galaxy 2?", 
-        "reference_answer": "Pom Klementieff played the role of Mantis in Guardians of the Galaxy Vol. 2" 
-      },
-      {
-        "query": "What is fertilisation?",
-        "reference_answer": "Fertilization is the union of a human egg and sperm, usually occurring in the ampulla of the fallopian tube"
-      }
-    ],
-    "benchmark_queries": [
-      "What type of fertilisation takes place in humans",
-      "Who played Mantis in Guardians of the Galaxy 2"
-    ],
-    "k_values": [1, 3, 5],
-    "benchmark_runs": 3,
-  }
+  "retrieval_cases": [
+    { "query": "What is fertilisation?", "relevant_ids": [74508, 58981, 11561] }
+  ],
+  "quality_cases": [
+    {
+      "query": "Who played Mantis in Guardians of the Galaxy 2?",
+      "reference_answer": "Pom Klementieff played the role of Mantis"
+    }
+  ],
+  "benchmark_queries": [
+    "What type of fertilisation takes place in humans",
+    "Who played Mantis in Guardians of the Galaxy 2"
+  ],
+  "k_values": [1, 3, 5],
+  "benchmark_runs": 3
+}
 ```
 
 **Response**
@@ -221,10 +214,63 @@ Runs evaluation and optionally generates an HTML report.
   "latency": {
     "dense":         { "mean_ms": 68.9, "p95_ms": 102.7 },
     "full_pipeline": { "mean_ms": 545.7, "p95_ms": 776.7 }
-  },
-  "report": "generating in background → evaluation_report.html"
+  }
 }
 ```
+
+---
+
+### `POST /evaluate/auto`
+
+Auto evaluation — builds test cases from metadata automatically.
+No need to provide `relevant_ids` or `reference_answer`.
+
+- `relevant_ids` = all chunk indices sharing the same question in metadata
+- `reference_answer` = `short_answer` column from metadata
+
+**Request**
+```json
+{
+  "sample_size": 50,
+  "k_values": [1, 3, 5],
+  "benchmark_runs": 3,
+  "seed": 42
+}
+```
+
+**Response**
+```json
+{
+  "sample_size": 100,
+  "retrieval": {
+    "precision@1": 0.77,
+    "recall@5": 0.95,
+    "mrr@5": 0.85
+  },
+  "response_quality": {
+    "bleu": 0.54,
+    "rouge1": 0.98,
+    "rougeL": 0.98
+  },
+  "latency": {
+    "dense":         { "mean_ms": 0.015, "p95_ms": 0.018 },
+    "full_pipeline": { "mean_ms": 1023.2, "p95_ms": 1274.2 }
+  }
+}
+```
+
+---
+
+## Caching
+
+Two in-memory TTL caches in `rag.py`:
+
+| Cache | Key | TTL | Max Size |
+|-------|-----|-----|----------|
+| `dense_cache` | `(query, top_k)` | 1 hour | 1024 |
+| `rewrite_cache` | `(query, last 2 history turns)` | 30 min | 512 |
+
+Cache stats are exposed via `GET /health`.
 
 ---
 
